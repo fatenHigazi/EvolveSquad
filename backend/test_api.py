@@ -1,81 +1,8 @@
-
-
-### Updated `/backend/pyproject.toml`
-
-```toml
-[tool.poetry]
-name = "voting-system-backend"
-version = "0.1.0"
-description = ""
-authors = ["Your Name <you@example.com>"]
-readme = "README.md"
-packages = [{include = "project"}]
-
-[tool.poetry.dependencies]
-python = "^3.10"
-Django = "^5.0.0"
-djangorestframework = "^3.15.1"
-psycopg2-binary = "^2.9.9"
-django-cors-headers = "^4.3.1"
-python-dotenv = "^1.0.1"
-drf-spectacular = "^0.27.2"
-# No factory-boy, use model_bakery instead.
-
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.2.2"
-pytest-django = "^4.8.0"
-model_bakery = "^1.19.4"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-```
-
------
-
-### `/backend/pytest.ini`
-
-```ini
-[pytest]
-DJANGO_SETTINGS_MODULE = project.settings
-python_files = tests.py test_*.py
-```
-
------
-
-### `/backend/conftest.py`
-
-```python
-import pytest
-from rest_framework.test import APIClient
-from model_bakery import baker
-from app.models import Feature, Vote
-
-@pytest.fixture
-def api_client():
-    return APIClient()
-
-@pytest.fixture
-def feature_factory():
-    """Returns a factory function to create Feature instances."""
-    return baker.make
-
-@pytest.fixture
-def vote_factory():
-    """Returns a factory function to create Vote instances."""
-    return baker.make
-```
-
------
-
-### `/backend/tests/test_api.py`
-
-```python
 import pytest
 from django.urls import reverse
 from rest_framework import status
 from app.models import Feature, Vote
+
 
 @pytest.mark.django_db
 class TestFeatureAPI:
@@ -86,12 +13,12 @@ class TestFeatureAPI:
         """
         create_url = reverse("feature-list")
         data = {"title": "New Awesome Feature", "description": "This is a great new feature."}
-        
+
         response = api_client.post(create_url, data, format="json")
         assert response.status_code == status.HTTP_201_CREATED
         assert "id" in response.data
         assert response.data["title"] == data["title"]
-        
+
         list_url = reverse("feature-list")
         response = api_client.get(list_url)
         assert response.status_code == status.HTTP_200_OK
@@ -112,7 +39,7 @@ class TestFeatureAPI:
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data["voteCount"] == 1
         assert Vote.objects.filter(feature=feature, voter_id=voter_id).exists()
-        
+
         # Second upvote should return 200 with the specified message
         response = api_client.post(upvote_url, data, format="json")
         assert response.status_code == status.HTTP_200_OK
@@ -135,10 +62,10 @@ class TestFeatureAPI:
 
         list_url = reverse("feature-list")
         response = api_client.get(list_url)
-        
+
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 3
-        
+
         # Check order
         assert response.data[0]["title"] == feature_b.title  # 3 votes
         assert response.data[1]["title"] == feature_c.title  # 1 vote
@@ -151,57 +78,6 @@ class TestFeatureAPI:
         non_existent_id = 999
         upvote_url = reverse("feature-upvote", kwargs={"pk": non_existent_id})
         data = {"voter_id": "voter_404"}
-        
+
         response = api_client.post(upvote_url, data, format="json")
         assert response.status_code == status.HTTP_404_NOT_FOUND
-```
-
------
-
-### Updated `/backend/README.md`
-
-### Voting System Backend
-
-This project is the backend for a voting system, built with Django and Django REST Framework.
-
-#### **Setup**
-
-This project uses Docker to manage the backend and PostgreSQL database.
-
-1.  **Create `.env` file:**
-    Copy the contents from `.env.example` to a new file named `.env` in the `/backend` directory and fill in your PostgreSQL database credentials.
-
-2.  **Start the Docker containers:**
-
-    ```bash
-    docker compose up --build
-    ```
-
-    This command will build the backend image and start both the `backend` and `db` services.
-
-3.  **Run Database Migrations:**
-    Open a new terminal and run the following command to apply database migrations:
-
-    ```bash
-    docker compose exec backend python manage.py migrate
-    ```
-
-4.  **Seed Initial Data (Optional):**
-    To add sample data, run the seeding command:
-
-    ```bash
-    docker compose exec backend python manage.py dev_seed
-    ```
-
-The API will be available at `http://localhost:8000/api/`.
-
------
-
-#### **Running Tests**
-
-Before running tests, ensure your Docker containers are running and migrations are applied.
-
-1.  **Run Tests:**
-    ```bash
-    docker compose exec backend pytest -q
-    ```
