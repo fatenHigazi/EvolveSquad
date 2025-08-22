@@ -1,207 +1,142 @@
+Voting System
+This project is a minimal, end-to-end voting system built for showcasing a modern full-stack development workflow. It allows users to propose features and upvote existing ones. The system consists of a REST API backend and a native Android mobile client.
 
+<br>
 
-### Updated `/backend/pyproject.toml`
+<br>
 
-```toml
-[tool.poetry]
-name = "voting-system-backend"
-version = "0.1.0"
-description = ""
-authors = ["Your Name <you@example.com>"]
-readme = "README.md"
-packages = [{include = "project"}]
+Stack
+Backend: Python 3.x, Django, Django REST Framework
 
-[tool.poetry.dependencies]
-python = "^3.10"
-Django = "^5.0.0"
-djangorestframework = "^3.15.1"
-psycopg2-binary = "^2.9.9"
-django-cors-headers = "^4.3.1"
-python-dotenv = "^1.0.1"
-drf-spectacular = "^0.27.2"
-# No factory-boy, use model_bakery instead.
+Database: PostgreSQL
 
+Mobile App: Android, Kotlin, Jetpack Compose
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.2.2"
-pytest-django = "^4.8.0"
-model_bakery = "^1.19.4"
+<br>
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-```
+<br>
 
------
+Quickstart
+There are two ways to get the project running. Docker Compose is recommended for the fastest setup.
 
-### `/backend/pytest.ini`
+A) Using Docker Compose (Recommended) 🐳
+Configure Environment: Copy the example file and set your database credentials.
 
-```ini
-[pytest]
-DJANGO_SETTINGS_MODULE = project.settings
-python_files = tests.py test_*.py
-```
+Bash
 
------
+cp backend/.env.example backend/.env
+# Edit backend/.env with your Postgres user/password
+Start Services: Build and start the backend and database containers.
 
-### `/backend/conftest.py`
+Bash
 
-```python
-import pytest
-from rest_framework.test import APIClient
-from model_bakery import baker
-from app.models import Feature, Vote
+docker compose up --build
+Setup Database: Run migrations and seed initial data in the backend container.
 
-@pytest.fixture
-def api_client():
-    return APIClient()
+Bash
 
-@pytest.fixture
-def feature_factory():
-    """Returns a factory function to create Feature instances."""
-    return baker.make
+docker compose exec backend python manage.py migrate
+docker compose exec backend python manage.py dev_seed
+Your backend API is now running at http://localhost:8000.
 
-@pytest.fixture
-def vote_factory():
-    """Returns a factory function to create Vote instances."""
-    return baker.make
-```
+B) Running Locally 💻
+Set up Backend:
 
------
+Navigate to the backend directory.
 
-### `/backend/tests/test_api.py`
+Create and activate a Python virtual environment.
 
-```python
-import pytest
-from django.urls import reverse
-from rest_framework import status
-from app.models import Feature, Vote
+Install dependencies.
 
-@pytest.mark.django_db
-class TestFeatureAPI:
+Bash
 
-    def test_create_feature_and_list(self, api_client):
-        """
-        Test that a new feature can be created and appears in the list.
-        """
-        create_url = reverse("feature-list")
-        data = {"title": "New Awesome Feature", "description": "This is a great new feature."}
-        
-        response = api_client.post(create_url, data, format="json")
-        assert response.status_code == status.HTTP_201_CREATED
-        assert "id" in response.data
-        assert response.data["title"] == data["title"]
-        
-        list_url = reverse("feature-list")
-        response = api_client.get(list_url)
-        assert response.status_code == status.HTTP_200_OK
-        assert len(response.data) == 1
-        assert response.data[0]["title"] == data["title"]
+cd backend
+python -m venv venv
+source venv/bin/activate  # macOS/Linux
+# venv\Scripts\activate.bat # Windows
+pip install -r requirements.txt
+Run PostgreSQL: Ensure you have a local PostgreSQL instance running. The backend will attempt to connect to it using the environment variables below.
 
-    def test_upvote_idempotent_by_voter(self, api_client, feature_factory, vote_factory):
-        """
-        Test that a single voter cannot upvote the same feature more than once.
-        """
-        feature = feature_factory(Feature, title="Test Feature")
-        upvote_url = reverse("feature-upvote", kwargs={"pk": feature.id})
-        voter_id = "voter_123"
-        data = {"voter_id": voter_id}
+Configure and Run: Create a .env file in the backend directory with your database details, then run migrations and start the server.
 
-        # First upvote should succeed
-        response = api_client.post(upvote_url, data, format="json")
-        assert response.status_code == status.HTTP_201_CREATED
-        assert response.data["voteCount"] == 1
-        assert Vote.objects.filter(feature=feature, voter_id=voter_id).exists()
-        
-        # Second upvote should return 200 with the specified message
-        response = api_client.post(upvote_url, data, format="json")
-        assert response.status_code == status.HTTP_200_OK
-        assert response.data == {"already_upvoted": True}
-        assert Vote.objects.filter(feature=feature).count() == 1
+Bash
 
-    def test_vote_counts_sorting(self, api_client, feature_factory, vote_factory):
-        """
-        Test that features are sorted by vote count (desc) then creation date (desc).
-        """
-        # Create features with varying vote counts
-        feature_a = feature_factory(Feature, title="Feature A")
-        feature_b = feature_factory(Feature, title="Feature B")
-        feature_c = feature_factory(Feature, title="Feature C")
+# Sample .env
+# POSTGRES_DB=voting_system
+# POSTGRES_USER=youruser
+# POSTGRES_PASSWORD=yourpassword
 
-        # Give votes: B gets 3, C gets 1, A gets 0
-        for i in range(3):
-            vote_factory(Vote, feature=feature_b, voter_id=f"voter_b_{i}")
-        vote_factory(Vote, feature=feature_c, voter_id="voter_c_1")
+python manage.py migrate
+python manage.py dev_seed # Optional: seed with initial features
+python manage.py runserver
+<br>
 
-        list_url = reverse("feature-list")
-        response = api_client.get(list_url)
-        
-        assert response.status_code == status.HTTP_200_OK
-        assert len(response.data) == 3
-        
-        # Check order
-        assert response.data[0]["title"] == feature_b.title  # 3 votes
-        assert response.data[1]["title"] == feature_c.title  # 1 vote
-        assert response.data[2]["title"] == feature_a.title  # 0 votes
+<br>
 
-    def test_upvote_nonexistent_feature_404(self, api_client):
-        """
-        Test that upvoting a feature that does not exist returns a 404.
-        """
-        non_existent_id = 999
-        upvote_url = reverse("feature-upvote", kwargs={"pk": non_existent_id})
-        data = {"voter_id": "voter_404"}
-        
-        response = api_client.post(upvote_url, data, format="json")
-        assert response.status_code == status.HTTP_404_NOT_FOUND
-```
+API Endpoints
+The API is fully documented with a swagger-ui interface available at http://localhost:8000/api/schema/swagger/.
 
------
+List all features:
+GET http://localhost:8000/api/features/
 
-### Updated `/backend/README.md`
+Bash
 
-### Voting System Backend
+curl http://localhost:8000/api/features/
+Create a new feature:
+POST http://localhost:8000/api/features/
 
-This project is the backend for a voting system, built with Django and Django REST Framework.
+Bash
 
-#### **Setup**
+curl -X POST -H "Content-Type: application/json" -d '{"title":"My New Feature","description":"This is a cool idea."}' http://localhost:8000/api/features/
+Upvote a feature:
+POST http://localhost:8000/api/features/<id>/upvote/
 
-This project uses Docker to manage the backend and PostgreSQL database.
+Bash
 
-1.  **Create `.env` file:**
-    Copy the contents from `.env.example` to a new file named `.env` in the `/backend` directory and fill in your PostgreSQL database credentials.
+curl -X POST -H "Content-Type: application/json" -d '{"voter_id":"user_123"}' http://localhost:8000/api/features/1/upvote/
+<br>
 
-2.  **Start the Docker containers:**
+<br>
 
-    ```bash
-    docker compose up --build
-    ```
+Android App
+To run the Android client:
 
-    This command will build the backend image and start both the `backend` and `db` services.
+Open the androidApp folder in Android Studio.
 
-3.  **Run Database Migrations:**
-    Open a new terminal and run the following command to apply database migrations:
+The app is configured to connect to the backend running on the Android emulator's host machine. The BASE_URL is set to http://10.0.2.2:8000/api/. This IP address is a special alias for localhost inside the Android emulator.
 
-    ```bash
-    docker compose exec backend python manage.py migrate
-    ```
+Run the app on an emulator or a physical device with USB debugging enabled.
 
-4.  **Seed Initial Data (Optional):**
-    To add sample data, run the seeding command:
+<br>
 
-    ```bash
-    docker compose exec backend python manage.py dev_seed
-    ```
+<br>
 
-The API will be available at `http://localhost:8000/api/`.
+Running Tests
+To run the backend tests:
 
------
+Bash
 
-#### **Running Tests**
+docker compose exec backend pytest -q
+<br>
 
-Before running tests, ensure your Docker containers are running and migrations are applied.
+<br>
 
-1.  **Run Tests:**
-    ```bash
-    docker compose exec backend pytest -q
-    ```
+Troubleshooting
+Database Connection: Check that your backend/.env file has the correct database credentials.
+
+CORS Errors: If you're accessing the API from a different host (e.g., a web browser or a specific emulator), add its URL to the CORS_ALLOWED_ORIGINS list in backend/project/settings.py.
+
+Emulator Host: If your Android emulator cannot connect, ensure the backend is running and that the BASE_URL in Api.kt is correctly pointing to your host's IP address.
+
+<br>
+
+<br>
+
+Future Work & Limitations
+Full Authentication: The current system uses a simple voter_id string for identifying users. Full user registration and authentication should be implemented.
+
+Error Handling: The current error handling is minimal. More specific error messages and a consistent API error structure would improve client-side robustness.
+
+UI Polish: The Android app is a minimal implementation without any advanced styling.
+
+Web Client: A web-based frontend could be added to complement the native mobile app.

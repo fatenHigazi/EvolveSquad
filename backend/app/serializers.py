@@ -12,7 +12,8 @@ class FeatureSerializer(serializers.ModelSerializer):
 
     def validate_title(self, value):
         if not (3 <= len(value) <= 100):
-            raise serializers.ValidationError("Title must be between 3 and 100 characters.")
+            if value.strip() == "":
+                raise serializers.ValidationError("Title cannot be empty.")
         return value
 
     def validate_description(self, value):
